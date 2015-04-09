@@ -2,6 +2,7 @@ package com.example.simplecolabhelper;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -69,7 +70,7 @@ public class MainActivity extends Activity {
         ImageView statusBox = (ImageView) findViewById(R.id.status_box);
         statusBox.setBackgroundResource(R.drawable.green_box);
         
-        //Start an asynch task to wait for requests over the socket to compress videos
+        //Start an asynch task to wait for requests over the socket
         //Based on modified version of approach outlined:
         //http://android-er.blogspot.hk/2014/08/bi-directional-communication-between.html
         Thread socketServerThread = new Thread(new SocketServerThread(this.getBaseContext()));
@@ -197,7 +198,7 @@ public class MainActivity extends Activity {
 						Log.d("MainActivity SocketServerThread Run","Receive buffer size: " + bufferSize);
 					    long fileSize = inputFileDIS.readLong();
 					    byte[] bytes = new byte[bufferSize];
-					    ByteArrayOutputStream numbersBuffer = new ByteArrayOutputStream();
+					    ByteArrayOutputStream numbersOS = new ByteArrayOutputStream();
 					    Log.d("MainActivity onCreate","Numbers incoming fileSize: " + fileSize);
 					    
 					    //The next part of the message should be the number of iterations for the compute loop
@@ -212,27 +213,27 @@ public class MainActivity extends Activity {
 					    		Log.d("MainActivity SocketServerThread Run","Total Bytes read: " + totalCount);
 					    		logToScreen(".");
 					    	}
-					    	numbersBuffer.write(bytes, 0, thisReadCount);
+					    	numbersOS.write(bytes, 0, thisReadCount);
 					    }
 					    //Write the final buffer read in - this is necessary as thisReadCount will be set to -1 
 					    //when the end of stream id detected even when it has read in some bytes while detecting the end
 					    //of stream
-					    numbersBuffer.write(bytes);
+					    numbersOS.write(bytes);
 					    Log.d("MainActivity SocketServerThread Run","numbers file received");
 					    Log.d("MainActivity SocketServerThread Run","totalCount: " + totalCount);
 					    Log.d("MainActivity SocketServerThread Run","thisReadCount: " + thisReadCount);
 					    logToScreen("\n");
 					    String fileSizeString = new DecimalFormat("0.00").format(totalCount/1000000.0);
 					    loglnToScreen("Total Bytes read: " + totalCount + " (" + fileSizeString + "MB)");
-					    numbersBuffer.flush();
-					    numbersBuffer.close();
+					    numbersOS.flush();
+					    numbersOS.close();
 					    inputFileDIS.close();
 	
 					    //Update the status display
 		    			MainActivity.this.runOnUiThread(new Runnable() {
 		    	    	    @Override
 	    	    			public void run() {
-	    	    	    		stateTextView.setText(R.string.state_compressing_video);
+	    	    	    		stateTextView.setText(R.string.state_computing_result);
 	    	    	    		
 	        	    	    	//Set the status box to blinking orange
 	        	    	    	ImageView statusBox = (ImageView) findViewById(R.id.status_box);
@@ -242,33 +243,33 @@ public class MainActivity extends Activity {
 	        	    	        frameAnimation.start();
 	    	    			}
 		        		});
-		    			loglnToScreen("State: " + getResources().getString(R.string.state_compressing_video));
+		    			loglnToScreen("State: " + getResources().getString(R.string.state_computing_result));
 		    			
 		    			//Do the computation
-		    		    BufferedInputStream numbersFileIS;
+		    			ByteArrayInputStream numbersIS = new ByteArrayInputStream(numbersOS.toByteArray());
 		    		    double result = 0.0;
+		    		    int computeIterations = iterationCount;
 		    			try {
-		    				numbersFileIS = new BufferedInputStream(new FileInputStream(numbersFile));
 		    	    	
 		    		    	//Do the computation
-		    		    	int numbersFileSize = safeLongToInt(numbersFile.length());
-		    		    	Log.d("SimpleComputeTask","doInBackground numberfile length:" + numbersFile.length());
-		    		    	Log.d("SimpleComputeTask","doInBackground numberfile size:" + numbersFileSize);
+		    		    	int numbersArraySize = safeLongToInt(fileSize);
+		    		    	Log.d("SimpleComputeTask","doInBackground numberfile length:" + fileSize);
+		    		    	Log.d("SimpleComputeTask","doInBackground numberfile size:" + numbersArraySize);
 		    		    	
-		    		    	for(int i=0; i<numbersFileSize; i++) {
+		    		    	for(int i=0; i<numbersArraySize; i++) {
 		    		    		//Report progress every 100 loops
 		    		    		if( i % 50 == 0 ){
 		    		    			Log.d("SimpleComputeTask","doInBackground reporting progess i:" + i);
-		    		    			publishProgress(i);
+		    		    			updateProgress(i);
 		    		    		}
 		    		    		
 		    		    		
 		    		    		byte thisByte[] = new byte[1];
-		    		    		int readResult = numbersFileIS.read(thisByte);
+		    		    		int readResult = numbersIS.read(thisByte);
 		    		    		Log.d("SimpleComputeTask","doInBackground i" + i + "thisByte[0]: " + thisByte[0]);
 		    		    		if(readResult < 1) {
 		    		    			Log.d("SimpleComputeTask","doInBackground error reading numbers file");
-		    		    			return null;
+		    		    			return;
 		    		    		}
 		    		    		double interim = 0;
 		    		    		for(int j=0; j<computeIterations; j++){
@@ -289,7 +290,7 @@ public class MainActivity extends Activity {
 		    			MainActivity.this.runOnUiThread(new Runnable() {
 		    				@Override
 	    	    			public void run() {
-	    	    	    		stateTextView.setText(R.string.state_sending_compressed_video);
+	    	    	    		stateTextView.setText(R.string.state_sending_result);
 	    	    	    		
 	        	    	    	//Set the status box to blinking green
 	        	    	    	ImageView statusBox = (ImageView) findViewById(R.id.status_box);
@@ -304,9 +305,9 @@ public class MainActivity extends Activity {
 	    					    loglnToScreen("Result: " + resultString);
 	    	    			}
 	        			});
-		    			loglnToScreen("State: " + getResources().getString(R.string.state_sending_compressed_video));
+		    			loglnToScreen("State: " + getResources().getString(R.string.state_sending_result));
 		    			
-		    			//Send the compressed file back over the socket
+		    			//Send the result back over the socket
 		    			//First send the file size
 		    			Log.d("MainActivity SocketServerThread Run","Sending result back");
 					    socketBOS = new BufferedOutputStream(socket.getOutputStream());
@@ -323,10 +324,10 @@ public class MainActivity extends Activity {
 		    			MainActivity.this.runOnUiThread(new Runnable() {
 		    				@Override
 			    			public void run() {
-			    				stateTextView.setText(R.string.state_sent_compressed_file);
+			    				stateTextView.setText(R.string.state_sent_result);
 			    			}
 		    			});
-		    			loglnToScreen("State: " + getResources().getString(R.string.state_sent_compressed_file));
+		    			loglnToScreen("State: " + getResources().getString(R.string.state_sent_result));
 			    	    
 			    	    //Close socket
 					    socket.close();
@@ -354,6 +355,24 @@ public class MainActivity extends Activity {
 	    	   }
 	    	}  
 	    }
+    	
+    	public void updateProgress(int loopCount) {
+    		//Display the loop count
+    		Log.d("MainACtivity","updateProgress");
+    		
+    		final int numLoops = loopCount;
+			MainActivity.this.runOnUiThread(new Runnable() {
+				@Override
+    			public void run() {
+					TextView progressMessageTextView = (TextView) (TextView)findViewById(R.id.progress_textview);
+		        	String vidFileSizeString = new DecimalFormat("0").format(numLoops);
+		        	progressMessageTextView.setText(vidFileSizeString);
+    			}
+			});
+    		
+        	
+    		
+    	}
     }
     
     private void logToScreen(final String logText) {
@@ -382,19 +401,6 @@ public class MainActivity extends Activity {
 		});
     	
     }
-
-	@Override
-	public void onCompressingPorgressTaskUpdate(Long compressingFileSize) {
-		//Display the compression file size
-		
-		//Update the compressing file size
-		Log.d("MainACtivity","onCompressingPorgressTaskUpdate");
-		
-    	TextView progressMessageTextView = (TextView) (TextView)findViewById(R.id.progress_textview);
-    	String vidFileSizeString = new DecimalFormat("0.00").format(compressingFileSize/1000000.0);
-    	progressMessageTextView.setText(vidFileSizeString + " MB");
-		
-	}
 	
     private static int safeLongToInt(long l) {
     	//See: http://stackoverflow.com/a/1590842/334402
