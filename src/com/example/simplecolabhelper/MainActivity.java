@@ -227,7 +227,7 @@ public class MainActivity extends Activity {
 					    loglnToScreen("Total Bytes read: " + totalCount + " (" + fileSizeString + "MB)");
 					    numbersOS.flush();
 					    numbersOS.close();
-					    inputFileDIS.close();
+					    //inputFileDIS.close();
 	
 					    //Update the status display
 		    			MainActivity.this.runOnUiThread(new Runnable() {
@@ -300,7 +300,6 @@ public class MainActivity extends Activity {
 	        	    	        frameAnimation.start();
 	        	    	        
 	        	    	        //Log the result
-	        	    	        
 	    					    String resultString = new DecimalFormat("0.000000").format(thisResult);
 	    					    loglnToScreen("Result: " + resultString);
 	    	    			}
@@ -310,8 +309,11 @@ public class MainActivity extends Activity {
 		    			//Send the result back over the socket
 		    			//First send the file size
 		    			Log.d("MainActivity SocketServerThread Run","Sending result back");
+		    			loglnToScreen("Creating BufferedOutputStream");
 					    socketBOS = new BufferedOutputStream(socket.getOutputStream());
+					    loglnToScreen("Creating DataOutputStream");
 					    socketDOS = new DataOutputStream(socketBOS);
+					    loglnToScreen("Writing double result");
 					    socketDOS.writeDouble(result);
 	
 					    //Tidy up streams
@@ -347,6 +349,9 @@ public class MainActivity extends Activity {
 		    		   }
 		    		   if (socketBOS != null) {
 		    			   socketBOS.close();
+		    		   } 
+		    		   if (socketDOS != null) {
+		    			   socketDOS.close();
 		    		   } 
 				   } catch (IOException e) {
 					   Log.d("MainActivity SocketServerThread Run","error tidying up");
